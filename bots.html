@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Trading Bots - AITrackStocks</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              green: '#00C805',
+              red: '#FF5000',
+              black: '#000000',
+              gray: '#5D6C78',
+              lightgray: '#8F9AA3',
+              bg: '#F5F8FA',
+              border: '#E3E9ED'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    * { font-family: 'Inter', sans-serif; }
+    .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 20px); }
+    .scrollbar-hide::-webkit-scrollbar { display: none; }
+    .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+</head>
+<body class="bg-white">
+  <div id="app"></div>
+  
+  <script>
+    // Backend API URL
+    const API_URL = 'https://aitrackstocks-backend-production.up.railway.app';
+    
+    // Check authentication
+    if (localStorage.getItem('aistock_access') !== 'granted') {
+      window.location.href = 'login.html';
+    }
+    
+    // Bots State
+    const state = {
+      strategies: [],
+      myBots: [],
+      activeTab: 'marketplace',
+      selectedStrategy: null,
+      showCreateModal: false
+    };
+    
+    // Load strategies from API
+    async function loadStrategies() {
+      try {
+        const response = await fetch(`${API_URL}/api/bots/strategies`);
+        const data = await response.json();
+        state.strategies = data;
+        render();
+      } catch (error) {
+        console.error('Failed to load strategies:', error);
+        // Fallback data
+        state.strategies = [
+          { id: 'dca', name: 'Dollar Cost Averaging', description: 'Auto-invest fixed amounts at regular intervals', riskLevel: 'Low', minInvestment: 100, performance: { return30d: 5.2, trades: 12 } },
+          { id: 'momentum', name: 'Momentum Trader', description: 'Buy stocks showing upward momentum', riskLevel: 'Medium', minInvestment: 500, performance: { return30d: 8.7, trades: 24 } },
+          { id: 'swing', name: 'Swing Trader', description: 'Capture short-term price movements', riskLevel: 'High', minInvestment: 1000, performance: { return30d: 12.3, trades: 18 } },
+          { id: 'dividend', name: 'Dividend Harvester', description: 'Focus on high dividend yield stocks', riskLevel: 'Low', minInvestment: 250, performance: { return30d: 3.8, trades: 8 } }
+        ];
+        render();
+      }
+    }
+    
+    function logout() {
+      localStorage.removeItem('aistock_access');
+      window.location.href = 'login.html';
+    }
+
+    function render() {
+      const app = document.getElementById('app');
+      
+      app.innerHTML = `
+        <div class="min-h-screen pb-20">
+          <!-- Header -->
+          <header class="sticky top-0 bg-white z-40 border-b border-brand-border">
+            <div class="flex items-center justify-between px-4 h-14">
+              <div class="flex items-center gap-3">
+                <a href="index.html" class="p-2 hover:bg-gray-100 rounded-full">
+                  <i data-lucide="arrow-left" class="w-5 h-5 text-brand-gray"></i>
+                </a>
+                <span class="font-bold text-lg text-brand-black">Trading Bots</span>
+              </div>
+              <button onclick="logout()" class="p-2 hover:bg-gray-100 rounded-full">
+                <i data-lucide="log-out" class="w-5 h-5 text-brand-gray"></i>
+              </button>
+            </div>
+          </header>
+
+          <!-- Tabs -->
+          <div class="flex border-b border-brand-border bg-white">
+            <button onclick="state.activeTab='marketplace';render()" class="flex-1 py-3 text-sm font-medium ${state.activeTab === 'marketplace' ? 'text-brand-green border-b-2 border-brand-green' : 'text-brand-gray'}">
+              Marketplace
+            </button>
+            <button onclick="state.activeTab='mybots';render()" class="flex-1 py-3 text-sm font-medium ${state.activeTab === 'mybots' ? 'text-brand-green border-b-2 border-brand-green' : 'text-brand-gray'}">
+              My Bots
+            </button>
+          </div>
+
+          <!-- Content -->
+          <main class="p-4">
+            ${state.activeTab === 'marketplace' ? renderMarketplace() : renderMyBots()}
+          </main>
+        </div>
+      `;
+      
+      lucide.createIcons();
+    }
+    
+    function renderMarketplace() {
+      return `
+        <div class="space-y-4">
+          <!-- Hero Banner -->
+          <div class="bg-gradient-to-r from-brand-green to-green-600 rounded-2xl p-6 text-white">
+            <div class="flex items-start justify-between">
+              <div>
+                <h2 class="text-xl font-bold mb-2">Automate Your Trading</h2>
+                <p class="text-green-100 text-sm mb-4">Let AI-powered bots trade 24/7 while you sleep</p>
+                <div class="flex items-center gap-4 text-sm">
+                  <span class="flex items-center gap-1">
+                    <i data-lucide="users" class="w-4 h-4"></i>
+                    2,847 active
+                  </span>
+                  <span class="flex items-center gap-1">
+                    <i data-lucide="trending-up" class="w-4 h-4"></i>
+                    +15.3% avg
+                  </span>
+                </div>
+              </div>
+              <div class="w-16 h-16 bg-white/20 rounded-xl flex items-center justify-center">
+                <i data-lucide="bot" class="w-8 h-8"></i>
+              </div>
+            </div>
+          </div>
+
+          <!-- Strategies -->
+          <div>
+            <h3 class="font-bold text-brand-black mb-3">Available Strategies</h3>
+            <div class="space-y-3">
+              ${state.strategies.map(strategy => `
+                <div class="bg-white border border-brand-border rounded-xl p-4 hover:border-brand-green transition-colors cursor-pointer" onclick="state.selectedStrategy='${strategy.id}';state.showCreateModal=true;render()">
+                  <div class="flex items-start justify-between mb-3">
+                    <div class="flex items-center gap-3">
+                      <div class="w-12 h-12 bg-brand-bg rounded-xl flex items-center justify-center">
+                        <i data-lucide="${strategy.id === 'dca' ? 'calendar' : strategy.id === 'momentum' ? 'zap' : strategy.id === 'swing' ? 'activity' : 'coins'}" class="w-6 h-6 text-brand-green"></i>
+                      </div>
+                      <div>
+                        <h4 class="font-semibold text-brand-black">${strategy.name}</h4>
+                        <span class="text-xs px-2 py-0.5 ${strategy.riskLevel === 'Low' ? 'bg-green-100 text-green-700' : strategy.riskLevel === 'Medium' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'} rounded-full">
+                          ${strategy.riskLevel} Risk
+                        </span>
+                      </div>
+                    </div>
+                    <div class="text-right">
+                      <p class="text-lg font-bold text-brand-green">+${strategy.performance?.return30d || 0}%</p>
+                      <p class="text-xs text-brand-gray">30d return</p>
+                    </div>
+                  </div>
+                  <p class="text-sm text-brand-gray mb-3">${strategy.description}</p>
+                  <div class="flex items-center justify-between pt-3 border-t border-brand-border">
+                    <div class="flex items-center gap-4 text-sm">
+                      <span class="text-brand-gray">
+                        Min: <span class="font-semibold text-brand-black">$${strategy.minInvestment}</span>
+                      </span>
+                      <span class="text-brand-gray">
+                        Trades: <span class="font-semibold text-brand-black">${strategy.performance?.trades || 0}</span>
+                      </span>
+                    </div>
+                    <button class="text-brand-green font-semibold text-sm flex items-center gap-1">
+                      Configure <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                    </button>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+
+          <!-- Info Section -->
+          <div class="bg-brand-bg rounded-xl p-4">
+            <div class="flex items-start gap-3">
+              <i data-lucide="info" class="w-5 h-5 text-brand-gray flex-shrink-0 mt-0.5"></i>
+              <div>
+                <h4 class="font-semibold text-brand-black text-sm mb-1">How do trading bots work?</h4>
+                <p class="text-xs text-brand-gray leading-relaxed">
+                  Our AI-powered bots analyze market data 24/7 and execute trades based on your chosen strategy. You maintain full control over your funds.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+    
+    function renderMyBots() {
+      return `
+        <div class="text-center py-12">
+          <div class="w-20 h-20 bg-brand-bg rounded-full flex items-center justify-center mx-auto mb-4">
+            <i data-lucide="bot" class="w-10 h-10 text-brand-gray"></i>
+          </div>
+          <h3 class="font-bold text-brand-black mb-2">No Active Bots</h3>
+          <p class="text-sm text-brand-gray mb-6 max-w-xs mx-auto">
+            You haven't created any trading bots yet. Browse the marketplace to get started.
+          </p>
+          <button onclick="state.activeTab='marketplace';render()" class="bg-brand-green text-white font-semibold px-6 py-3 rounded-xl hover:bg-green-600 transition-colors">
+            Browse Strategies
+          </button>
+        </div>
+      `;
