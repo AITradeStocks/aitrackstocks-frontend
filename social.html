@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Social - AITrackStocks</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              green: '#00C805',
+              red: '#FF5000',
+              black: '#000000',
+              gray: '#5D6C78',
+              lightgray: '#8F9AA3',
+              bg: '#F5F8FA',
+              border: '#E3E9ED'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    * { font-family: 'Inter', sans-serif; }
+    .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 20px); }
+    .scrollbar-hide::-webkit-scrollbar { display: none; }
+    .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+</head>
+<body class="bg-white">
+  <div id="app"></div>
+  
+  <script>
+    // Backend API URL
+    const API_URL = 'https://aitrackstocks-backend-production.up.railway.app';
+    
+    // Check authentication
+    if (localStorage.getItem('aistock_access') !== 'granted') {
+      window.location.href = 'login.html';
+    }
+    
+    // State
+    const state = {
+      activeTab: 'feed',
+      posts: [
+        { id: 1, user: { name: 'Alex Trader', avatar: 'AT', verified: true }, action: 'bought', symbol: 'NVDA', shares: 50, price: 875, time: '2 min ago', likes: 24, comments: 5 },
+        { id: 2, user: { name: 'Sarah Invest', avatar: 'SI', verified: true }, action: 'sold', symbol: 'TSLA', shares: 25, price: 248, time: '15 min ago', likes: 18, comments: 3 },
+        { id: 3, user: { name: 'Mike Stocks', avatar: 'MS', verified: false }, action: 'achieved', achievement: '7-Day Streak', time: '1 hour ago', likes: 45, comments: 12 },
+        { id: 4, user: { name: 'Lisa Finance', avatar: 'LF', verified: true }, action: 'shared', text: 'Just analyzed the market - looking bullish on tech this week! 🚀', time: '2 hours ago', likes: 67, comments: 23 }
+      ],
+      suggestedUsers: [
+        { name: 'Tom Market', avatar: 'TM', followers: '12.4K', bio: 'Day trader | 5 years experience' },
+        { name: 'Jane Wealth', avatar: 'JW', followers: '8.9K', bio: 'Long-term investor' },
+        { name: 'David Trade', avatar: 'DT', followers: '6.7K', bio: 'Options specialist' }
+      ]
+    };
+    
+    function logout() {
+      localStorage.removeItem('aistock_access');
+      window.location.href = 'login.html';
+    }
+
+    function render() {
+      const app = document.getElementById('app');
+      
+      app.innerHTML = `
+        <div class="min-h-screen pb-20">
+          <!-- Header -->
+          <header class="sticky top-0 bg-white z-40 border-b border-brand-border">
+            <div class="flex items-center justify-between px-4 h-14">
+              <div class="flex items-center gap-3">
+                <a href="index.html" class="p-2 hover:bg-gray-100 rounded-full">
+                  <i data-lucide="arrow-left" class="w-5 h-5 text-brand-gray"></i>
+                </a>
+                <span class="font-bold text-lg text-brand-black">Social</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <button class="p-2 hover:bg-gray-100 rounded-full">
+                  <i data-lucide="search" class="w-5 h-5 text-brand-gray"></i>
+                </button>
+                <button onclick="logout()" class="p-2 hover:bg-gray-100 rounded-full">
+                  <i data-lucide="log-out" class="w-5 h-5 text-brand-gray"></i>
+                </button>
+              </div>
+            </div>
+          </header>
+
+          <!-- Tabs -->
+          <div class="flex border-b border-brand-border bg-white">
+            <button onclick="state.activeTab='feed';render()" class="flex-1 py-3 text-sm font-medium ${state.activeTab === 'feed' ? 'text-brand-green border-b-2 border-brand-green' : 'text-brand-gray'}">
+              Feed
+            </button>
+            <button onclick="state.activeTab='discover';render()" class="flex-1 py-3 text-sm font-medium ${state.activeTab === 'discover' ? 'text-brand-green border-b-2 border-brand-green' : 'text-brand-gray'}">
+              Discover
+            </button>
+          </div>
+
+          <!-- Content -->
+          <main class="pb-4">
+            ${state.activeTab === 'feed' ? renderFeed() : renderDiscover()}
+          </main>
+        </div>
+      `;
+      
+      lucide.createIcons();
+    }
+    
+    function renderFeed() {
+      return `
+        <!-- Create Post -->
+        <div class="px-4 py-4 bg-white border-b border-brand-border">
+          <div class="flex gap-3">
+            <div class="w-10 h-10 bg-brand-green rounded-full flex items-center justify-center flex-shrink-0">
+              <i data-lucide="user" class="w-5 h-5 text-white"></i>
+            </div>
+            <div class="flex-1">
+              <input type="text" placeholder="Share your trading thoughts..." class="w-full bg-brand-bg rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-green">
+              <div class="flex items-center justify-between mt-2">
+                <div class="flex gap-2">
+                  <button class="p-2 hover:bg-gray-100 rounded-full">
+                    <i data-lucide="image" class="w-5 h-5 text-brand-green"></i>
+                  </button>
+                  <button class="p-2 hover:bg-gray-100 rounded-full">
+                    <i data-lucide="bar-chart-2" class="w-5 h-5 text-brand-green"></i>
+                  </button>
+                </div>
+                <button class="bg-brand-green text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-600 transition-colors">
+                  Post
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Posts -->
+        <div class="divide-y divide-brand-border">
+          ${state.posts.map(post => `
+            <div class="px-4 py-4 bg-white">
+              <div class="flex gap-3">
+                <div class="w-10 h-10 bg-brand-bg rounded-full flex items-center justify-center flex-shrink-0">
+                  <span class="font-semibold text-brand-black text-sm">${post.user.avatar}</span>
+                </div>
+                <div class="flex-1">
+                  <div class="flex items-center gap-2 mb-1">
+                    <span class="font-semibold text-brand-black">${post.user.name}</span>
+                    ${post.user.verified ? '<i data-lucide="badge-check" class="w-4 h-4 text-blue-500"></i>' : ''}
+                    <span class="text-xs text-brand-gray">${post.time}</span>
+                  </div>
+                  
+                  ${post.action === 'shared' ? `
+                    <p class="text-brand-black mb-3">${post.text}</p>
+                  ` : post.action === 'achieved' ? `
+                    <p class="text-brand-black mb-3">🏆 Unlocked achievement: <span class="font-semibold text-brand-green">${post.achievement}</span></p>
+                  ` :
