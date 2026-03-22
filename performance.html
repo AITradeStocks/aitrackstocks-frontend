@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Performance - AITrackStocks</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              green: '#00C805',
+              red: '#FF5000',
+              black: '#000000',
+              gray: '#5D6C78',
+              lightgray: '#8F9AA3',
+              bg: '#F5F8FA',
+              border: '#E3E9ED'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    * { font-family: 'Inter', sans-serif; }
+    .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 20px); }
+    .scrollbar-hide::-webkit-scrollbar { display: none; }
+    .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+</head>
+<body class="bg-white">
+  <div id="app"></div>
+  
+  <script>
+    // Backend API URL
+    const API_URL = 'https://aitrackstocks-backend-production.up.railway.app';
+    
+    // Check authentication
+    if (localStorage.getItem('aistock_access') !== 'granted') {
+      window.location.href = 'login.html';
+    }
+    
+    // State
+    const state = {
+      timeframe: '1M',
+      portfolioHistory: [10000, 10200, 10150, 10400, 10300, 10600, 10800, 11200, 11100, 11500, 11800, 12400],
+      stats: {
+        totalReturn: 24.0,
+        totalReturnAmount: 2400,
+        bestTrade: { symbol: 'NVDA', return: 45.2 },
+        worstTrade: { symbol: 'TSLA', return: -12.8 },
+        winRate: 68,
+        totalTrades: 47,
+        avgHoldTime: '12 days'
+      }
+    };
+    
+    const formatCurrency = (val) => '$' + val.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    
+    function logout() {
+      localStorage.removeItem('aistock_access');
+      window.location.href = 'login.html';
+    }
+
+    // Canvas Chart
+    function drawChart() {
+      const canvas = document.getElementById('performance-chart');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      ctx.scale(dpr, dpr);
+      
+      const width = rect.width;
+      const height = rect.height;
+      const padding = 20;
+      
+      const data = state.portfolioHistory;
+      const min = Math.min(...data);
+      const max = Math.max(...data);
+      const range = max - min || 1;
+      
+      ctx.clearRect(0, 0, width, height);
+      
+      // Draw line
+      ctx.beginPath();
+      ctx.strokeStyle = '#00C805';
+      ctx.lineWidth = 3;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      
+      data.forEach((point, i) => {
+        const x = padding + (i / (data.length - 1)) * (width - 2 * padding);
+        const y = height - padding - ((point - min) / range) * (height - 2 * padding);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      
+      ctx.stroke();
+      
+      // Gradient fill
+      const gradient = ctx.createLinearGradient(0, 0, 0, height);
+      gradient.addColorStop(0, 'rgba(0, 200, 5, 0.3)');
+      gradient.addColorStop(1, 'rgba(0, 200, 5, 0)');
+      
+      ctx.lineTo(width - padding, height);
+      ctx.lineTo(padding, height);
+      ctx.closePath();
+      ctx.fillStyle = gradient;
+      ctx.fill();
+    }
+
+    function render() {
+      const app = document.getElementById('app');
+      
+      app.innerHTML = `
+        <div class="min-h-screen pb-20">
+          <!-- Header -->
+          <header class="sticky top-0 bg-white z-40 border-b border-brand-border">
+            <div class="flex items-center justify-between px-4 h-14">
+              <div class="flex items-center gap-3">
+                <a href="index.html" class="p-2 hover:bg-gray-100 rounded-full">
+                  <i data-lucide="arrow-left" class="w-5 h-5 text-brand-gray"></i>
+                </a>
+                <span class="font-bold text-lg text-brand-black">Performance</span>
+              </div>
+              <button onclick="logout()" class="p-2 hover:bg-gray-100 rounded-full">
+                <i data-lucide="log-out" class="w-5 h-5 text-brand-gray"></i>
+              </button>
+            </div>
+          </header>
+
+          <!-- Total Return -->
+          <div class="px-4 py-6 bg-white">
+            <p class="text-sm text-brand-gray mb-1">Total Return</p>
+            <div class="flex items-baseline gap-2 mb-4">
+              <h1 class="text-4xl font-bold text-brand-green">+${state.stats.totalReturn}%</h1>
+              <span class="text-lg text-brand-green font-medium">+${formatCurrency(state.stats.totalReturnAmount)}</span>
+            </div>
+            
+            <!-- Timeframe Selector -->
+            <div class="flex gap-2">
+              ${['1D', '1W', '1M', '3M', '1Y', 'ALL'].map(tf => `
+                <button 
+                  onclick="state.timeframe='${tf}';render()"
+                  class="px-4 py-2 rounded-lg text-sm font-medium transition-colors ${state.timeframe === tf ? 'bg-brand-green text-white' : 'bg-brand-bg text-brand-gray hover:bg-gray-200'}"
+                >
+                  ${tf}
+                </button>
+              `).join('')}
+            </div>
+          </div>
+
+          <!-- Chart -->
+          <div class="px-4 py-4 bg-brand-bg">
+            <div class="bg-white rounded-2xl p-4 shadow-sm">
+              <canvas id="performance-chart" class="w-full h-48"></canvas>
+            </div>
+          </div>
+
+          <!-- Stats Grid -->
+          <div class="px-4 py-4">
+            <h2 class="font-bold text-brand-black mb-3">Trading Statistics</h2>
+            <div class="grid grid-cols-2 gap-3">
+              <div class="bg-white border border-brand-border rounded-xl p-4">
+                <div class="flex items-center gap-2 mb-2">
+                  <div class="w-8 h-8 bg-brand-green/10 rounded-lg flex items-center justify-center">
+                    <i data-lucide="trending-up" class="w-4 h-4 text-brand-green"></i>
+                  </div>
+                  <span class="text-sm text-brand-gray">Win Rate</span>
+                </div>
+                <p class="text-2xl font-bold text-brand-black">${state.stats.winRate}%</p>
+                <p class="text-xs text-brand-gray">${state.stats.totalTrades} trades</p>
+              </div>
+              
+              <div class="bg-white border border-brand-border rounded-xl p-4">
+                <div class="flex items-center gap-2 mb-2">
+                  <div class="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                    <i data-lucide="clock" class="w-4 h-4 text-blue-600"></i>
+                  </div>
+                  <span class="text-sm text-brand-gray">Avg Hold</span>
+                </div>
+                <p class="text-2xl font-bold text-brand-black">${state.stats.avgHoldTime}</p>
+                <p class="text-xs text-brand-gray">per position</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Best/Worst Trades -->
+          <div class="px-4 py-4 bg-brand-bg">
+            <h2 class="font-bold text-brand-black mb-3">Trade Highlights</h2>
+            <div class="space-y-3">
+              <div class="bg-white rounded-xl p-4 flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                  <div class="w-10 h-10 bg-brand-green/10 rounded-lg flex items-center justify-center">
+                    <i data-lucide="trophy" class="w-5 h-5 text-brand-green"></i>
+                  </div>
+                  <div>
+                    <p class="text-sm text-brand-gray">Best Trade</p>
+                    <p class="font-semibold text-brand-black">${state.stats.bestTrade.symbol}</p>
+                  </div>
+                </div>
+                <p class="font-bold text-brand-green">+${state.stats.bestTrade.return}%</p>
+              </div>
+              
+              <div class="bg-white rounded-xl p-4 flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                  <div class="w-10 h-10 bg-brand-red/10 rounded-lg flex items-center justify-center">
+                    <i data-lucide="alert-triangle" class="w-5 h-5 text-brand-red"></i>
+                  </div>
+                  <div>
+                    <p class="text-sm text-brand-gray">Worst Trade</p>
+                    <p class="font-semibold text-brand-black">${state.stats.worstTrade.symbol}</p>
+                  </div>
+                </div>
+                <p class="font-bold text-brand-red">${state.stats.worstTrade.return}%</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Monthly Breakdown -->
+          <div class="px-4 py-4">
+            <h2 class="font-bold text-brand-black mb-3">Monthly Returns</h2>
+            <div class="space-y-2">
+              ${[
+                { month: 'March 2026', return: 8.5 },
+                { month: 'February 2026', return: 6.2 },
+                { month: 'January 2026', return: 4.8 },
+                { month: 'December 2025', return: 3.2 }
+              ].map(m => `
+                <div class="flex items-center justify-between py-3 border-b border-brand-border last:border-0">
+                  <span class="text-brand-black">${m.month}</span>
+                  <span class="font-semibold text-brand-green">+${m.return}%</span>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+
+          <!-- Download Button -->
+          <div class="px-4 py-4">
+            <button class="w-full bg-white border border-brand-border text-brand-black font-semibold py-4 rounded-xl hover:bg-gray-50 transition-colors flex items-center justify-center gap-2">
+              <i data-lucide="download" class="w-5 h-5"></i>
+              Download Tax Report
+            </button>
+          </div>
+        </div>
+      `;
+      
+      lucide.createIcons();
+      
+      // Draw chart after render
+      setTimeout(drawChart, 100);
+    }
+
+    render();
+  </script>
+</body>
+</html>
