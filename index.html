@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>AITrackStocks - Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              green: '#00C805',
+              red: '#FF5000',
+              black: '#000000',
+              gray: '#5D6C78',
+              lightgray: '#8F9AA3',
+              bg: '#F5F8FA',
+              border: '#E3E9ED'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    * { font-family: 'Inter', sans-serif; }
+    .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 20px); }
+    .scrollbar-hide::-webkit-scrollbar { display: none; }
+    .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+</head>
+<body class="bg-white">
+  <div id="app"></div>
+  
+  <script>
+    // Backend API URL
+    const API_URL = 'https://aitrackstocks-backend-production.up.railway.app';
+    
+    // API Helper Functions
+    async function apiGet(endpoint) {
+      try {
+        const response = await fetch(`${API_URL}${endpoint}`);
+        return await response.json();
+      } catch (error) {
+        console.error('API Error:', error);
+        return null;
+      }
+    }
+    
+    async function apiPost(endpoint, data) {
+      try {
+        const response = await fetch(`${API_URL}${endpoint}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        return await response.json();
+      } catch (error) {
+        console.error('API Error:', error);
+        return null;
+      }
+    }
+    
+    // Check authentication
+    if (localStorage.getItem('aistock_access') !== 'granted') {
+      window.location.href = 'login.html';
+    }
+    
+    // App State
+    const state = {
+      currentPage: 'dashboard',
+      selectedStock: null,
+      showBuyModal: false,
+      showSellModal: false,
+      timeframe: '1D',
+      portfolioValue: 124567.89,
+      buyingPower: 15432.50,
+      watchlist: [
+        { ticker: 'AAPL', name: 'Apple', price: 195.89, change: 2.34, changePercent: 1.21 },
+        { ticker: 'TSLA', name: 'Tesla', price: 248.50, change: -5.20, changePercent: -2.05 },
+        { ticker: 'NVDA', name: 'NVIDIA', price: 875.28, change: 28.45, changePercent: 3.36 },
+        { ticker: 'MSFT', name: 'Microsoft', price: 420.55, change: 5.67, changePercent: 1.37 },
+        { ticker: 'AMZN', name: 'Amazon', price: 178.35, change: 3.21, changePercent: 1.83 },
+      ],
+      positions: [
+        { ticker: 'AAPL', shares: 50, avgPrice: 180.50, currentPrice: 195.89, value: 9794.50, pnl: 769.50, pnlPercent: 8.52 },
+        { ticker: 'NVDA', shares: 10, avgPrice: 750.00, currentPrice: 875.28, value: 8752.80, pnl: 1252.80, pnlPercent: 16.70 },
+        { ticker: 'TSLA', shares: 25, avgPrice: 260.00, currentPrice: 248.50, value: 6212.50, pnl: -287.50, pnlPercent: -4.42 },
+      ],
+      signals: [
+        { ticker: 'NVDA', score: 94, action: 'STRONG_BUY', overlap: 47, congress: 8 },
+        { ticker: 'META', score: 89, action: 'BUY', overlap: 38, congress: 6 },
+        { ticker: 'GOOGL', score: 85, action: 'BUY', overlap: 43, congress: 7 },
+      ],
+      marketMovers: null
+    };
+
+    // Utility functions
+    const formatCurrency = (val) => '$' + val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const isPositive = (val) => val >= 0;
+    
+    // Auth functions
+    function logout() {
+      localStorage.removeItem('aistock_access');
+      localStorage.removeItem('aistock_code');
+      window.location.href = 'login.html';
+    }
+    
+    // Load data from backend API
+    async function loadDataFromAPI() {
+      try {
+        // Load portfolio
+        const portfolio = await apiGet('/api/portfolio');
+        if (portfolio) {
+          state.portfolioValue = portfolio.totalValue || state.portfolioValue;
+          state.positions = portfolio.holdings?.map(h => ({
+            ticker: h.symbol,
+            shares: h.quantity,
+            avgPrice: h.avgPrice,
+            currentPrice: h.currentPrice || h.avgPrice,
+            value: (h.currentPrice || h.avgPrice) * h.quantity,
+            pnl: ((h.currentPrice || h.avgPrice) - h.avgPrice) * h.quantity,
+            pnlPercent: (((h.currentPrice || h.avgPrice) - h.avgPrice) / h.avgPrice) * 100
+          })) || state.positions;
+        }
+        
+        // Load signals
+        const signals = await apiGet('/api/signals');
+        if (signals && signals.length > 0) {
+          state.signals = signals.map(s => ({
+            ticker: s.symbol,
+            score: s.confidence,
+            action: s.type,
+            reason: s.reason
+          }));
+        }
+        
+        // Load market movers
+        const movers = await apiGet('/api/market/movers');
+        if (movers) {
+          state.marketMovers = movers;
+        }
+        
+        console.log('Data loaded from API');
+        render();
+      } catch (error) {
+        console.log('Using mock data (API unavailable)');
+      }
+    }
+
+    // Canvas Chart Component
+    function drawChart(canvasId, data, color, isPositive) {
+      const canvas = document.getElementById(canvasId);
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      ctx.scale(dpr, dpr);
+      
+      const width = rect.width;
+      const height = rect.height;
+      const padding = 10;
+      
+      const min = Math.min(...data);
+      const max = Math.max(...data);
+      const range = max - min || 1;
+      
+      ctx.clearRect(0, 0, width, height);
+      ctx.beginPath();
+      ctx.strokeStyle = isPositive ? '#00C805' : '#FF5000';
+      ctx.lineWidth = 2;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      
+      data.forEach((point, i) => {
+        const x = padding + (i / (data.length - 1)) * (width - 2 * padding);
+        const y = height - padding - ((point - min) / range) * (height - 2 * padding);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      
+      ctx.stroke();
+      
+      // Gradient fill
+      const gradient = ctx.createLinearGradient(0, 0, 0, height);
+      gradient.addColorStop(0, isPositive ? 'rgba(0, 200, 5, 0.2)' : 'rgba(255, 80, 0, 0.2)');
+      gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+      
+      ctx.lineTo(width - padding, height);
+      ctx.lineTo(padding, height);
+      ctx.closePath();
+      ctx.fillStyle = gradient;
+      ctx.fill();
+    }
+
+    // Navigation Component
+    function renderNavigation() {
+      const navItems = [
+        { id: 'dashboard', icon: 'home', label: 'Home' },
+        { id: 'portfolio', icon: 'pie-chart', label: 'Portfolio' },
+        { id: 'signals', icon: 'zap', label: 'Signals' },
+        { id: 'discover', icon: 'search', label: 'Discover' },
+        { id: 'more', icon: 'menu', label: 'More' }
+      ];
+      
+      return `
+        <nav class="fixed bottom-0 left-0 right-0 bg-white border-t border-brand-border safe-bottom z-50">
+          <div class="flex justify-around items-center h-16 pb-safe">
+            ${navItems.map(item => `
+              <button onclick="state.currentPage='${item.id}';render()" 
+                class="flex flex-col items-center justify-center flex-1 h-full ${state.currentPage === item.id ? 'text-brand-green' : 'text-brand-gray'}">
+                <i data-lucide="${item.icon}" class="w-6 h-6 mb-1"></i>
+                <span class="text-xs font-medium">${item.label}</span>
+              </button>
+            `).join('')}
+          </div>
+        </nav>
+      `;
+    }
+
+    // Header Component
+    function renderHeader() {
+      return `
+        <header class="sticky top-0 bg-white z-40 border-b border-brand-border">
+          <div class="flex items-center justify-between px-4 h-14">
+            <div class="flex items-center gap-2">
+              <div class="w-8 h-8 bg-brand-green rounded-lg flex items-center justify-center">
+                <i data-lucide="trending-up" class="w-5 h-5 text-white"></i>
+              </div>
+              <span class="font-bold text-lg">AITrackStocks</span>
+            </div>
+            <div class="flex items-center gap-3">
+              <button onclick="logout()" class="p-2 hover:bg-gray-100 rounded-full">
+                <i data-lucide="log-out" class="w-5 h-5 text-brand-gray"></i>
+              </button>
+            </div>
+          </div>
+        </header>
+      `;
+    }
+
+    // Portfolio Summary Component
+    function renderPortfolioSummary() {
+      const totalPnl = state.positions.reduce((sum, p) => sum + p.pnl, 0);
+      const totalPnlPercent = (totalPnl / (state.portfolioValue - totalPnl)) * 100;
+      
+      return `
+        <div class="px-4 py-6 bg-white">
+          <div class="text-center mb-6">
+            <p class="text-sm text-brand-gray mb-1">Total Portfolio Value</p>
+            <h1 class="text-4xl font-bold text-brand-black mb-1">${formatCurrency(state.portfolioValue)}</h1>
+            <div class="flex items-center justify-center gap-2">
+              <span class="${isPositive(totalPnl) ? 'text-brand-green' : 'text-brand-red'} font-semibold flex items-center gap-1">
+                <i data-lucide="${isPositive(totalPnl) ? 'trending-up' : 'trending-down'}" class="w-4 h-4"></i>
+                ${isPositive(totalPnl) ? '+' : ''}${formatCurrency(totalPnl)} (${isPositive(totalPnl) ? '+' : ''}${totalPnlPercent.toFixed(2)}%)
+              </span>
+              <span class="text-sm text-brand-lightgray">Today</span>
+            </div>
+          </div>
+          
+          <div class="flex gap-3">
+            <button onclick="state.showBuyModal=true;render()" class="flex-1 bg-brand-green text-white font-semibold py-3.5 rounded-xl hover:bg-green-600 transition-colors flex items-center justify-center gap-2">
+              <i data-lucide="plus" class="w-5 h-5"></i>
+              Buy
+            </button>
+            <button onclick="state.showSellModal=true;render()" class="flex-1 bg-white text-brand-green font-semibold py-3.5 rounded-xl border-2 border-brand-green hover:bg-green-50 transition-colors flex items-center justify-center gap-2">
+              <i data-lucide="minus" class="w-5 h-5"></i>
+              Sell
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    // Watchlist Component
+    function renderWatchlist() {
+      return `
+        <div class="px-4 py-4 bg-brand-bg">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="font-bold text-lg text-brand-black">Watchlist</h2>
+            <button class="text-brand-green font-medium text-sm flex items-center gap-1">
+              View All <i data-lucide="chevron-right" class="w-4 h-4"></i>
+            </button>
+          </div>
+          <div class="space-y-2">
+            ${state.watchlist.map(stock => `
+              <div class="bg-white rounded-xl p-4 flex items-center justify-between shadow-sm" onclick="state.selectedStock='${stock.ticker}';render()">
+                <div class="flex items-center gap-3">
+                  <div class="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center font-bold text-sm text-brand-gray">
+                    ${stock.ticker.slice(0, 2)}
+                  </div>
+                  <div>
+                    <p class="font-semibold text-brand-black">${stock.ticker}</p>
+                    <p class="text-sm text-brand-gray">${stock.name}</p>
+                  </div>
+                </div>
+                <div class="text-right">
+                  <p class="font-semibold text-brand-black">${formatCurrency(stock.price)}</p>
+                  <p class="text-sm ${isPositive(stock.change) ? 'text-brand-green' : 'text-brand-red'} flex items-center gap-1 justify-end">
+                    <i data-lucide="${isPositive(stock.change) ? 'trending-up' : 'trending-down'}" class="w-3 h-3"></i>
+                    ${isPositive(stock.change) ? '+' : ''}${stock.changePercent.toFixed(2)}%
+                  </p>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    // Positions Component
+    function renderPositions() {
+      return `
+        <div class="px-4 py-4">
+          <h2 class="font-bold text-lg text-brand-black mb-3">Your Positions</h2>
+          <div class="space-y-3">
+            ${state.positions.map(pos => `
+              <div class="bg-white rounded-xl p-4 border border-brand-border">
+                <div class="flex items-center justify-between mb-3">
+                  <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center font-bold text-sm text-brand-gray">
+                      ${pos.ticker.slice(0, 2)}
+                    </div>
+                    <div>
+                      <p class="font-semibold text-brand-black">${pos.ticker}</p>
+                      <p class="text-sm text-brand-gray">${pos.shares} shares</p>
+                    </div>
+                  </div>
+                  <div class="text-right">
+                    <p class="font-semibold text-brand-black">${formatCurrency(pos.value)}</p>
+                    <p class="text-sm text-brand-gray">Avg: ${formatCurrency(pos.avgPrice)}</p>
+                  </div>
+                </div>
+                <div class="flex items-center justify-between pt-3 border-t border-brand-border">
+                  <div>
+                    <p class="text-xs text-brand-gray">Total Return</p>
+                    <p class="font-semibold ${isPositive(pos.pnl) ? 'text-brand-green' : 'text-brand-red'}">
+                      ${isPositive(pos.pnl) ? '+' : ''}${formatCurrency(pos.pnl)} (${isPositive(pos.pnl) ? '+' : ''}${pos.pnlPercent.toFixed(2)}%)
+                    </p>
+                  </div>
+                  <div class="text-right">
+                    <p class="text-xs text-brand-gray">Current Price</p>
+                    <p class="font-semibold text-brand-black">${formatCurrency(pos.currentPrice)}</p>
+                  </div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    // AI Signals Component
+    function renderAISignals() {
+      return `
+        <div class="px-4 py-4 bg-brand-bg">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="font-bold text-lg text-brand-black flex items-center gap-2">
+              <i data-lucide="sparkles" class="w-5 h-5 text-brand-green"></i>
+              AI Signals
+            </h2>
+            <a href="ai-copilot.html" class="text-brand-green font-medium text-sm flex items-center gap-1">
+              Chat <i data-lucide="message-circle" class="w-4 h-4"></i>
+            </a>
+          </div>
+          <div class="space-y-2">
+            ${state.signals.map(signal => `
+              <div class="bg-white rounded-xl p-4 shadow-sm">
+                <div class="flex items-center justify-between mb-2">
+                  <div class="flex items-center gap-2">
+                    <span class="font-bold text-brand-black">${signal.ticker}</span>
+                    <span class="px-2 py-0.5 bg-brand-green/10 text-brand-green text-xs font-semibold rounded-full">
+                      ${signal.score}/100
+                    </span>
+                  </div>
+                  <span class="px-3 py-1 ${signal.action === 'STRONG_BUY' ? 'bg-brand-green text-white' : signal.action === 'BUY' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'} text-xs font-bold rounded-full">
+                    ${signal.action}
+                  </span>
+                </div>
+                <div class="flex items-center gap-4 text-sm text-brand-gray">
+                  <span class="flex items-center gap-1">
+                    <i data-lucide="users" class="w-4 h-4"></i>
+                    ${signal.overlap}% overlap
+                  </span>
+                  <span class="flex items-center gap-1">
+                    <i data-lucide="landmark" class="w-4 h-4"></i>
+                    ${signal.congress} congress
+                  </span>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    // Buy Modal
+    function renderBuyModal() {
+      if (!state.showBuyModal) return '';
+      return `
+        <div class="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center" onclick="if(event.target===this){state.showBuyModal=false;render()}">
+          <div class="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl p-6 animate-slide-up">
+            <div class="flex items-center justify-between mb-6">
+              <h3 class="text-xl font-bold">Buy Stock</h3>
+              <button onclick="state.showBuyModal=false;render()" class="p-2 hover:bg-gray-100 rounded-full">
+                <i data-lucide="x" class="w-6 h-6"></i>
+              </button>
+            </div>
+            <div class="space-y-4">
+              <div>
+                <label class="block text-sm font-medium text-brand-gray mb-2">Stock Symbol</label>
+                <input type="text" placeholder="AAPL" class="w-full px-4 py-3 border border-brand-border rounded-xl focus:outline-none focus:border-brand-green text-lg font-semibold uppercase">
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-brand-gray mb-2">Shares</label>
+                <input type="number" placeholder="0" class="w-full px-4 py-3 border border-brand-border rounded-xl focus:outline-none focus:border-brand-green text-lg font-semibold">
+              </div>
+              <div class="bg-brand-bg rounded-xl p-4">
+                <div class="flex justify-between text-sm mb-2">
+                  <span class="text-brand-gray">Market Price</span>
+                  <span class="font-semibold">$195.89</span>
+                </div>
+                <div class="flex justify-between text-sm mb-2">
+                  <span class="text-brand-gray">Estimated Cost</span>
+                  <span class="font-semibold">$0.00</span>
+                </div>
+                <div class="flex justify-between font-semibold">
+                  <span>Buying Power</span>
+                  <span class="text-brand-green">${formatCurrency(state.buyingPower)}</span>
+                </div>
+              </div>
+              <button onclick="state.showBuyModal=false;render()" class="w-full bg-brand-green text-white font-semibold py-4 rounded-xl hover:bg-green-600 transition-colors">
+                Review Order
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    // Main Render
+    function render() {
+      const app = document.getElementById('app');
+      
+      app.innerHTML = `
+        <div class="min-h-screen pb-20">
+          ${renderHeader()}
+          
+          <main class="max-w-lg mx-auto">
+            ${renderPortfolioSummary()}
+            ${renderWatchlist()}
+            ${renderPositions()}
+            ${renderAISignals()}
+          </main>
+          
+          ${renderNavigation()}
+          ${renderBuyModal()}
+        </div>
+      `;
+      
+      // Draw charts after render
+      setTimeout(() => {
+        state.watchlist.forEach(stock => {
+          const chartData = Array.from({length: 50}, () => stock.price + (Math.random() - 0.5) * 10);
+          drawChart(`chart-${stock.ticker}`, chartData, stock.change >= 0, stock.change >= 0);
+        });
+      }, 100);
+      
+      lucide.createIcons();
+    }
+
+    // Initial render - load data from API first
+    loadDataFromAPI();
+    render();
+  </script>
+  
+  <style>
+    @keyframes slide-up {
+      from { transform: translateY(100%); }
+      to { transform: translateY(0); }
+    }
+    .animate-slide-up {
+      animation: slide-up 0.3s ease-out;
+    }
+  </style>
+</body>
+</html>
