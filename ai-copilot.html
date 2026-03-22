@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>AI Copilot - AITrackStocks</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              green: '#00C805',
+              red: '#FF5000',
+              black: '#000000',
+              gray: '#5D6C78',
+              lightgray: '#8F9AA3',
+              bg: '#F5F8FA',
+              border: '#E3E9ED'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    * { font-family: 'Inter', sans-serif; }
+    .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 20px); }
+    .scrollbar-hide::-webkit-scrollbar { display: none; }
+    .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+</head>
+<body class="bg-white">
+  <div id="app"></div>
+  
+  <script>
+    // Backend API URL
+    const API_URL = 'https://aitrackstocks-backend-production.up.railway.app';
+    
+    // Check authentication
+    if (localStorage.getItem('aistock_access') !== 'granted') {
+      window.location.href = 'login.html';
+    }
+    
+    // Chat State
+    const state = {
+      messages: [
+        { type: 'ai', text: 'Hello! I\'m your AI trading assistant. I can help you with stock analysis, portfolio advice, and market insights. What would you like to know?' }
+      ],
+      inputText: '',
+      isLoading: false
+    };
+    
+    async function sendMessage() {
+      if (!state.inputText.trim() || state.isLoading) return;
+      
+      const userMessage = state.inputText.trim();
+      state.messages.push({ type: 'user', text: userMessage });
+      state.inputText = '';
+      state.isLoading = true;
+      render();
+      
+      try {
+        // Call backend AI API
+        const response = await fetch(`${API_URL}/api/copilot/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: userMessage })
+        });
+        
+        const data = await response.json();
+        state.messages.push({ type: 'ai', text: data.response || 'I apologize, I could not process that request.' });
+      } catch (error) {
+        console.error('AI Error:', error);
+        // Fallback responses
+        let fallback = "I'm here to help with trading questions! I can discuss market trends, explain concepts, or analyze stocks.";
+        if (userMessage.toLowerCase().includes('buy') || userMessage.toLowerCase().includes('sell')) {
+          fallback = "I can't provide specific buy/sell recommendations. However, I can help you analyze stocks or discuss trading strategies.";
+        } else if (userMessage.toLowerCase().includes('portfolio')) {
+          fallback = "Diversification is key! Consider spreading investments across different sectors and asset classes.";
+        }
+        state.messages.push({ type: 'ai', text: fallback });
+      }
+      
+      state.isLoading = false;
+      render();
+      
+      // Scroll to bottom
+      setTimeout(() => {
+        const chatContainer = document.getElementById('chat-messages');
+        if (chatContainer) chatContainer.scrollTop = chatContainer.scrollHeight;
+      }, 100);
+    }
+    
+    function logout() {
+      localStorage.removeItem('aistock_access');
+      window.location.href = 'login.html';
+    }
+
+    function render() {
+      const app = document.getElementById('app');
+      
+      app.innerHTML = `
+        <div class="min-h-screen flex flex-col">
+          <!-- Header -->
+          <header class="sticky top-0 bg-white z-40 border-b border-brand-border">
+            <div class="flex items-center justify-between px-4 h-14">
+              <div class="flex items-center gap-3">
+                <a href="index.html" class="p-2 hover:bg-gray-100 rounded-full">
+                  <i data-lucide="arrow-left" class="w-5 h-5 text-brand-gray"></i>
+                </a>
+                <div class="flex items-center gap-2">
+                  <div class="w-8 h-8 bg-gradient-to-br from-purple-500 to-blue-500 rounded-lg flex items-center justify-center">
+                    <i data-lucide="sparkles" class="w-4 h-4 text-white"></i>
+                  </div>
+                  <div>
+                    <span class="font-bold text-brand-black">AI Copilot</span>
+                    <p class="text-xs text-brand-green flex items-center gap-1">
+                      <span class="w-2 h-2 bg-brand-green rounded-full animate-pulse"></span>
+                      Online
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <button onclick="logout()" class="p-2 hover:bg-gray-100 rounded-full">
+                <i data-lucide="log-out" class="w-5 h-5 text-brand-gray"></i>
+              </button>
+            </div>
+          </header>
+
+          <!-- Chat Messages -->
+          <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-hide bg-brand-bg">
+            ${state.messages.map(msg => `
+              <div class="flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}">
+                <div class="max-w-[80%] ${msg.type === 'user' 
+                  ? 'bg-brand-green text-white rounded-2xl rounded-tr-sm' 
+                  : 'bg-white text-brand-black rounded-2xl rounded-tl-sm shadow-sm'} px-4 py-3">
+                  <p class="text-sm leading-relaxed">${msg.text}</p>
+                </div>
+              </div>
+            `).join('')}
+            
+            ${state.isLoading ? `
+              <div class="flex justify-start">
+                <div class="bg-white rounded-2xl rounded-tl-sm shadow-sm px-4 py-3 flex items-center gap-2">
+                  <div class="w-2 h-2 bg-brand-gray rounded-full animate-bounce"></div>
+                  <div class="w-2 h-2 bg-brand-gray rounded-full animate-bounce" style="animation-delay: 0.1s"></div>
+                  <div class="w-2 h-2 bg-brand-gray rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
+                </div>
+              </div>
+            ` : ''}
+          </div>
+
+          <!-- Quick Suggestions -->
+          <div class="bg-white border-t border-brand-border px-4 py-3">
+            <p class="text-xs text-brand-gray mb-2">Quick questions:</p>
+            <div class="flex gap-2 overflow-x-auto scrollbar-hide pb-2">
+              ${['Should I diversify?', 'What is RSI?', 'Market outlook?', 'Risk management'].map(q => `
+                <button onclick="state.inputText='${q}';send
