@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Achievements - AITrackStocks</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              green: '#00C805',
+              red: '#FF5000',
+              black: '#000000',
+              gray: '#5D6C78',
+              lightgray: '#8F9AA3',
+              bg: '#F5F8FA',
+              border: '#E3E9ED'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    * { font-family: 'Inter', sans-serif; }
+    .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 20px); }
+    .scrollbar-hide::-webkit-scrollbar { display: none; }
+    .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+</head>
+<body class="bg-white">
+  <div id="app"></div>
+  
+  <script>
+    // Backend API URL
+    const API_URL = 'https://aitrackstocks-backend-production.up.railway.app';
+    
+    // Check authentication
+    if (localStorage.getItem('aistock_access') !== 'granted') {
+      window.location.href = 'login.html';
+    }
+    
+    // State
+    const state = {
+      userLevel: 12,
+      userXP: 2450,
+      nextLevelXP: 3000,
+      streak: 7,
+      achievements: [
+        { id: 1, name: 'First Trade', description: 'Complete your first trade', icon: 'zap', unlocked: true, xp: 100, color: 'green' },
+        { id: 2, name: '7-Day Streak', description: 'Trade for 7 consecutive days', icon: 'flame', unlocked: true, xp: 250, color: 'orange' },
+        { id: 3, name: 'Profit Maker', description: 'Make a profit on 10 trades', icon: 'trending-up', unlocked: true, xp: 500, color: 'green' },
+        { id: 4, name: 'Portfolio Pro', description: 'Build a portfolio worth $10K+', icon: 'pie-chart', unlocked: true, xp: 300, color: 'blue' },
+        { id: 5, name: 'AI Whisperer', description: 'Use AI Copilot 50 times', icon: 'sparkles', unlocked: false, xp: 400, color: 'purple', progress: 35, total: 50 },
+        { id: 6, name: 'Smart Follower', description: 'Copy 5 Congress trades', icon: 'landmark', unlocked: false, xp: 350, color: 'blue', progress: 2, total: 5 },
+        { id: 7, name: 'Bot Master', description: 'Run a trading bot for 30 days', icon: 'bot', unlocked: false, xp: 600, color: 'purple', progress: 12, total: 30 },
+        { id: 8, name: 'Social Star', description: 'Get 100 followers', icon: 'users', unlocked: false, xp: 450, color: 'pink', progress: 23, total: 100 },
+        { id: 9, name: 'Market Guru', description: 'Achieve 50% portfolio return', icon: 'crown', unlocked: false, xp: 1000, color: 'yellow', progress: 24, total: 50 },
+        { id: 10, name: 'Legendary Trader', description: 'Complete all achievements', icon: 'award', unlocked: false, xp: 2000, color: 'gold', progress: 4, total: 10 }
+      ]
+    };
+    
+    const unlockedCount = state.achievements.filter(a => a.unlocked).length;
+    const totalXP = state.achievements.filter(a => a.unlocked).reduce((sum, a) => sum + a.xp, 0);
+    
+    function logout() {
+      localStorage.removeItem('aistock_access');
+      window.location.href = 'login.html';
+    }
+
+    function render() {
+      const app = document.getElementById('app');
+      
+      app.innerHTML = `
+        <div class="min-h-screen pb-20">
+          <!-- Header -->
+          <header class="sticky top-0 bg-white z-40 border-b border-brand-border">
+            <div class="flex items-center justify-between px-4 h-14">
+              <div class="flex items-center gap-3">
+                <a href="index.html" class="p-2 hover:bg-gray-100 rounded-full">
+                  <i data-lucide="arrow-left" class="w-5 h-5 text-brand-gray"></i>
+                </a>
+                <span class="font-bold text-lg text-brand-black">Achievements</span>
+              </div>
+              <button onclick="logout()" class="p-2 hover:bg-gray-100 rounded-full">
+                <i data-lucide="log-out" class="w-5 h-5 text-brand-gray"></i>
+              </button>
+            </div>
+          </header>
+
+          <!-- Level Card -->
+          <div class="bg-gradient-to-br from-brand-green to-green-600 px-4 py-8 text-white">
+            <div class="flex items-center justify-between mb-6">
+              <div>
+                <p class="text-green-100 text-sm mb-1">Level ${state.userLevel}</p>
+                <h2 class="text-3xl font-bold">${state.userXP.toLocaleString()} XP</h2>
+              </div>
+              <div class="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center border-4 border-white/30">
+                <span class="text-4xl">🏆</span>
+              </div>
+            </div>
+            
+            <!-- XP Progress -->
+            <div class="mb-2">
+              <div class="flex justify-between text-sm mb-1">
+                <span class="text-green-100">${state.userXP.toLocaleString()} XP</span>
+                <span class="text-green-100">${state.nextLevelXP.toLocaleString()} XP</span>
+              </div>
+              <div class="h-3 bg-white/20 rounded-full overflow-hidden">
+                <div class="h-full bg-white rounded-full" style="width: ${(state.userXP / state.nextLevelXP) * 100}%"></div>
+              </div>
+            </div>
+            <p class="text-sm text-green-100">${state.nextLevelXP - state.userXP} XP to Level ${state.userLevel + 1}</p>
+          </div>
+
+          <!-- Stats -->
+          <div class="flex border-b border-brand-border bg-white">
+            <div class="flex-1 py-4 text-center border-r border-brand-border">
+              <p class="text-2xl font-bold text-brand-black">${unlockedCount}</p>
+              <p class="text-xs text-brand-gray">Unlocked</p>
+            </div>
+            <div class="flex-1 py-4 text-center border-r border-brand-border">
+              <p class="text-2xl font-bold text-brand-black">${state.achievements.length - unlockedCount}</p>
+              <p class="text-xs text-brand-gray">Locked</p>
+            </div>
+            <div class="flex-1 py-4 text-center">
+              <p class="text-2xl font-bold text-brand-green">${totalXP}</p>
+              <p class="text-xs text-brand-gray">Total XP</p>
+            </div>
+          </div>
+
+          <!-- Streak Banner -->
+          <div class="px-4 py-4 bg-brand-bg">
+            <div class="bg-white rounded-xl p-4 flex items-center gap-4">
+              <div class="w-14 h-14 bg-orange-100 rounded-xl flex items-center justify-center">
+                <span class="text-3xl">🔥</span>
+              </div>
+              <div class="flex-1">
+                <p class="font-bold text-brand-black">${state.streak} Day Streak!</p>
+                <p class="text-sm text-brand-gray">Keep trading daily to maintain your streak</p>
+              </div>
+              <div class="text-right">
+                <p class="text-2xl font-bold text-orange-500">${state.streak}</p>
+                <p class="text-xs text-brand-gray">days</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Achievements List -->
+          <div class="px-4 py-4">
+            <h3 class="font-bold text-brand-black mb-3">All Achievements</h3>
+            <div class="space-y-3">
+              ${state.achievements.map(ach => `
+                <div class="bg-white border ${ach.unlocked ? 'border-brand-green' : 'border-brand-border'} rounded-xl p-4 ${ach.unlocked ? 'bg-green-50/50' : ''}">
+                  <div class="flex items-start gap-3">
+                    <div class="w-12 h-12 ${ach.unlocked ? `bg-${ach.color}-100` : 'bg-gray-100'} rounded-xl flex items-center justify-center flex-shrink-0">
+                      <i data-lucide="${ach.icon}" class="w-6 h-6 ${ach.unlocked ? `text-${ach.color}-600` : 'text-gray-400'}"></i>
+                    </div>
+                    <div class="flex-1">
+                      <div class="flex items-center gap-2 mb-1">
+                        <h4 class="font-semibold text-brand-black ${ach.unlocked ? '' : 'text-gray-500'}">${ach.name}</h4>
+                        ${ach.unlocked ? '<span class="px-2 py-0.5 bg-brand-green text-white text-xs rounded-full">Unlocked</span>' : ''}
+                      </div>
+                      <p class="text-sm ${ach.unlocked ? 'text-brand-gray' : 'text-gray-400'} mb-2">${ach.description}</p>
+                      <div class="flex items-center justify-between">
+                        <span class="text-sm font-medium ${ach.unlocked ? 'text-brand-green' : 'text-gray-400'}">+${ach.xp} XP</span>
+                        ${!ach.unlocked && ach.progress !== undefined ? `
+                          <div class="flex items-center gap-2">
+                            <div class="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
+                              <div class="h-full bg-gray-400 rounded-full" style="width: ${(ach.progress / ach.total) * 100}%"></div>
+                            </div>
+                            <span class="text-xs text-gray-400">${ach.progress}/${ach.total}</span>
+                          </div>
+                        ` : ''}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+
+          <!-- Share Button -->
+          <div class="px-4 py-4">
+            <button class="w-full bg-brand-bg text-brand-black font-semibold py-4 rounded-xl hover:bg-gray-200 transition-colors flex items-center justify-center gap-2">
+              <i data-lucide="share-2" class="w-5 h-5"></i>
+              Share My Progress
+            </button>
+          </div>
+        </div>
+      `;
+      
+      lucide.createIcons();
+    }
+
+    render();
+  </script>
+</body>
+</html>
