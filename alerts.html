@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Price Alerts - AITrackStocks</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              green: '#00C805',
+              red: '#FF5000',
+              black: '#000000',
+              gray: '#5D6C78',
+              lightgray: '#8F9AA3',
+              bg: '#F5F8FA',
+              border: '#E3E9ED'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    * { font-family: 'Inter', sans-serif; }
+    .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 20px); }
+    .scrollbar-hide::-webkit-scrollbar { display: none; }
+    .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+</head>
+<body class="bg-white">
+  <div id="app"></div>
+  
+  <script>
+    // Backend API URL
+    const API_URL = 'https://aitrackstocks-backend-production.up.railway.app';
+    
+    // Check authentication
+    if (localStorage.getItem('aistock_access') !== 'granted') {
+      window.location.href = 'login.html';
+    }
+    
+    // State
+    const state = {
+      alerts: [],
+      showCreateModal: false,
+      newAlert: { symbol: '', type: 'PRICE_TARGET', condition: 'ABOVE', value: '' }
+    };
+    
+    // Load alerts from API
+    async function loadAlerts() {
+      try {
+        const response = await fetch(`${API_URL}/api/alerts`);
+        const data = await response.json();
+        state.alerts = data;
+        render();
+      } catch (error) {
+        console.error('Failed to load alerts:', error);
+        // Fallback
+        state.alerts = [
+          { id: '1', symbol: 'AAPL', type: 'PRICE_TARGET', condition: 'ABOVE', value: 200, isActive: true },
+          { id: '2', symbol: 'TSLA', type: 'PERCENT_CHANGE', condition: 'BELOW', value: -5, isActive: true }
+        ];
+        render();
+      }
+    }
+    
+    async function createAlert() {
+      try {
+        const response = await fetch(`${API_URL}/api/alerts`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(state.newAlert)
+        });
+        const data = await response.json();
+        state.alerts.push(data);
+        state.showCreateModal = false;
+        state.newAlert = { symbol: '', type: 'PRICE_TARGET', condition: 'ABOVE', value: '' };
+        render();
+      } catch (error) {
+        console.error('Failed to create alert:', error);
+      }
+    }
+    
+    function toggleAlert(id) {
+      const alert = state.alerts.find(a => a.id === id);
+      if (alert) {
+        alert.isActive = !alert.isActive;
+        render();
+      }
+    }
+    
+    function deleteAlert(id) {
+      state.alerts = state.alerts.filter(a => a.id !== id);
+      render();
+    }
+    
+    function logout() {
+      localStorage.removeItem('aistock_access');
+      window.location.href = 'login.html';
+    }
+
+    function render() {
+      const app = document.getElementById('app');
+      
+      app.innerHTML = `
+        <div class="min-h-screen pb-20">
+          <!-- Header -->
+          <header class="sticky top-0 bg-white z-40 border-b border-brand-border">
+            <div class="flex items-center justify-between px-4 h-14">
+              <div class="flex items-center gap-3">
+                <a href="index.html" class="p-2 hover:bg-gray-100 rounded-full">
+                  <i data-lucide="arrow-left" class="w-5 h-5 text-brand-gray"></i>
+                </a>
+                <span class="font-bold text-lg text-brand-black">Price Alerts</span>
+              </div>
+              <button onclick="logout()" class="p-2 hover:bg-gray-100 rounded-full">
+                <i data-lucide="log-out" class="w-5 h-5 text-brand-gray"></i>
+              </button>
+            </div>
+          </header>
+
+          <!-- Content -->
+          <main class="p-4">
+            ${state.alerts.length === 0 ? renderEmpty() : renderAlertsList()}
+          </main>
+
+          <!-- FAB -->
+          <button onclick="state.showCreateModal=true;render()" class="fixed bottom-20 right-4 w-14 h-14 bg-brand-green text-white rounded-full shadow-lg flex items-center justify-center hover:bg-green-600 transition-colors">
+            <i data-lucide="plus" class="w-6 h-6"></i>
+          </button>
+          
+          ${state.showCreateModal ? renderCreateModal() : ''}
+        </div>
+      `;
+      
+      lucide.createIcons();
+    }
+    
+    function renderEmpty() {
+      return `
+        <div class="text-center py-12">
+          <div class="w-20 h-20 bg-brand-bg rounded-full flex items-center justify-center mx-auto mb-4">
+            <i data-lucide="bell" class="w-10 h-10 text-brand-gray"></i>
+          </div>
+          <h3 class="font-bold text-brand-black mb-2">No Alerts Yet</h3>
+          <p class="text-sm text-brand-gray mb-6 max-w-xs mx-auto">
+            Set up price alerts to get notified when stocks hit your target prices.
+          </p>
+          <button onclick="state.showCreateModal=true;render()" class="bg-brand-green text-white font-semibold px-6 py-3 rounded-xl hover:bg-green-600 transition-colors">
+            Create First Alert
+          </button>
+        </div>
+      `;
+    }
+    
+    function renderAlertsList() {
+      return `
+        <div class="space-y-3">
+          ${state.alerts.map(alert => `
+            <div class="bg-white border border-brand-border rounded-xl p-4">
+              <div class="flex items-start justify-between mb-3">
+                <div class="flex items-center gap-3">
+                  <div class="w-10 h-10 ${alert.isActive ? 'bg-brand-green/10' : 'bg-gray-100'} rounded-lg flex items-center justify-center">
+                    <i data-lucide="bell" class="w-5 h-5 ${alert.isActive ? 'text-brand-green' : 'text-brand-gray'}"></i>
+                  </div>
+                  <div>
+                    <span class="font-bold text-brand-black">${alert.symbol}</span>
+                    <p class="text-xs text-brand-gray">${alert.type.replace('_', ' ')}</p>
+                  </div>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" ${alert.isActive ? 'checked' : ''} onchange="toggleAlert('${alert.id}')" class="sr-only peer">
+                  <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-green"></div>
+                </label>
+              </div>
+              <div class="flex items-center justify-between pt-3 border-t border-brand-border">
+                <div class="flex items-center gap-2">
+                  <span class="px-2 py-1 bg-brand-bg text-xs text-brand-gray rounded">
+                    ${alert.condition}
+                  </span>
+                  <span class="font-semibold text-brand-black">
+                    ${alert.type === 'PERCENT_CHANGE' ? alert.value + '%' : '$' + alert.value}
+                  </span>
+                </div>
+                <button onclick="deleteAlert('${alert.id}')" class="p-2 hover:bg-red-50 rounded-full text-brand-red">
+                  <i data-lucide="trash-2" class="w-4 h-4"></i>
+                </button>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }
+    
+    function renderCreateModal() {
+      return `
+        <div class="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center" onclick="if(event.target===this){state.showCreateModal=false;render()}">
+          <div class="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl p-6 animate-slide-up">
+            <div class="flex items-center justify-between mb-6">
+              <h3 class="text-xl font-bold text-brand-black">Create Alert</h3>
+              <button onclick="state.showCreateModal=false;render()" class="p-2 hover:bg-gray-100 rounded-full">
+                <i data-lucide="x" class="w-6 h-6 text-brand-gray"></i>
+              </button>
+            </div>
+            
+            <div class="space-y-4">
+              <div>
+                <label class="block text-sm font-medium text-brand-gray mb-2">Stock Symbol</label>
+                <input 
+                  type="text" 
+                  value="${state.newAlert.symbol}"
+                  oninput="state.newAlert.symbol=this.value.toUpperCase()"
+                  placeholder="AAPL"
+                  class="w-full px-4 py-3 border border-brand-border rounded-xl focus:outline-none focus:border-brand-green text-lg font-semibold uppercase"
+                >
+              </div>
+              
+              <div>
+                <label class="block text-sm font-medium text-brand-gray mb-2">Alert Type</label>
+                <select 
+                  onchange="state.newAlert.type=this.value"
+                  class="w-full px-4 py-3 border border-brand-border rounded-xl focus:outline-none focus:border-brand-green bg-white"
+                >
+                  <option value="PRICE_TARGET">Price Target</option>
+                  <option value="PERCENT_CHANGE">Percent Change</option>
+                </select>
+              </div>
+              
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-sm font-medium text-brand-gray mb-2">Condition</label>
+                  <select 
+                    onchange="state.newAlert.condition=this.value"
