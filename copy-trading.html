@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Copy Trading - AITrackStocks</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              green: '#00C805',
+              red: '#FF5000',
+              black: '#000000',
+              gray: '#5D6C78',
+              lightgray: '#8F9AA3',
+              bg: '#F5F8FA',
+              border: '#E3E9ED'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    * { font-family: 'Inter', sans-serif; }
+    .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 20px); }
+    .scrollbar-hide::-webkit-scrollbar { display: none; }
+    .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+</head>
+<body class="bg-white">
+  <div id="app"></div>
+  
+  <script>
+    // Backend API URL
+    const API_URL = 'https://aitrackstocks-backend-production.up.railway.app';
+    
+    // Check authentication
+    if (localStorage.getItem('aistock_access') !== 'granted') {
+      window.location.href = 'login.html';
+    }
+    
+    // State
+    const state = {
+      activeTab: 'trades',
+      trades: [],
+      leaderboard: [],
+      isLoading: true
+    };
+    
+    // Load data from API
+    async function loadData() {
+      try {
+        // Load trades
+        const tradesResponse = await fetch(`${API_URL}/api/smart-money/trades`);
+        const tradesData = await tradesResponse.json();
+        state.trades = tradesData;
+        
+        // Load leaderboard
+        const leaderboardResponse = await fetch(`${API_URL}/api/smart-money/leaderboard`);
+        const leaderboardData = await leaderboardResponse.json();
+        state.leaderboard = leaderboardData;
+      } catch (error) {
+        console.error('Failed to load data:', error);
+      } finally {
+        state.isLoading = false;
+        render();
+      }
+    }
+    
+    function formatAmount(amount) {
+      if (amount >= 1000000) return '$' + (amount / 1000000).toFixed(1) + 'M';
+      if (amount >= 1000) return '$' + (amount / 1000).toFixed(0) + 'K';
+      return '$' + amount;
+    }
+    
+    function logout() {
+      localStorage.removeItem('aistock_access');
+      window.location.href = 'login.html';
+    }
+
+    function render() {
+      const app = document.getElementById('app');
+      
+      app.innerHTML = `
+        <div class="min-h-screen pb-20">
+          <!-- Header -->
+          <header class="sticky top-0 bg-white z-40 border-b border-brand-border">
+            <div class="flex items-center justify-between px-4 h-14">
+              <div class="flex items-center gap-3">
+                <a href="index.html" class="p-2 hover:bg-gray-100 rounded-full">
+                  <i data-lucide="arrow-left" class="w-5 h-5 text-brand-gray"></i>
+                </a>
+                <span class="font-bold text-lg text-brand-black">Smart Money</span>
+              </div>
+              <button onclick="logout()" class="p-2 hover:bg-gray-100 rounded-full">
+                <i data-lucide="log-out" class="w-5 h-5 text-brand-gray"></i>
+              </button>
+            </div>
+          </header>
+
+          <!-- Info Banner -->
+          <div class="bg-gradient-to-r from-blue-600 to-purple-600 px-4 py-4 text-white">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
+                <i data-lucide="landmark" class="w-5 h-5"></i>
+              </div>
+              <div>
+                <h2 class="font-bold text-sm">Congress Trading Tracker</h2>
+                <p class="text-xs text-white/80">Follow trades by Senators & Representatives</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tabs -->
+          <div class="flex border-b border-brand-border bg-white">
+            <button onclick="state.activeTab='trades';render()" class="flex-1 py-3 text-sm font-medium ${state.activeTab === 'trades' ? 'text-brand-green border-b-2 border-brand-green' : 'text-brand-gray'}">
+              Recent Trades
+            </button>
+            <button onclick="state.activeTab='leaderboard';render()" class="flex-1 py-3 text-sm font-medium ${state.activeTab === 'leaderboard' ? 'text-brand-green border-b-2 border-brand-green' : 'text-brand-gray'}">
+              Leaderboard
+            </button>
+          </div>
+
+          <!-- Content -->
+          <main class="p-4">
+            ${state.isLoading ? renderLoading() : (state.activeTab === 'trades' ? renderTrades() : renderLeaderboard())}
+          </main>
+        </div>
+      `;
+      
+      lucide.createIcons();
+    }
+    
+    function renderLoading() {
+      return `
+        <div class="flex items-center justify-center py-12">
+          <div class="w-8 h-8 border-2 border-brand-green border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      `;
+    }
+    
+    function renderTrades() {
+      return `
+        <div class="space-y-3">
+          ${state.trades.map(trade => `
+            <div class="bg-white border border-brand-border rounded-xl p-4">
+              <div class="flex items-start justify-between mb-3">
+                <div class="flex items-center gap-3">
+                  <div class="w-10 h-10 ${trade.transaction === 'BUY' ? 'bg-brand-green/
