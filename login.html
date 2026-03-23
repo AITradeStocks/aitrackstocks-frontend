@@ -1,145 +1,49 @@
-'use client';
-
-import { useState } from 'react';
-import { useAuth } from '@/lib/auth-context';
-import Link from 'next/link';
-import { TrendingUp, Lock, ArrowRight } from 'lucide-react';
-
-export default function LoginPage() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
-
-    try {
-      await login(email, password);
-    } catch (err: any) {
-      setError(err.message || 'Login failed');
-    } finally {
-      setLoading(false);
+<!DOCTYPE html>
+<html>
+<head>
+  <title>AITrackStocks Login</title>
+  <style>
+    body {
+      font-family: Arial;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      background: #f9f9f9;
     }
-  };
+    .box {
+      background: white;
+      padding: 30px;
+      border-radius: 10px;
+      width: 300px;
+      text-align: center;
+    }
+    input {
+      width: 100%;
+      padding: 12px;
+      margin: 10px 0;
+    }
+    button {
+      width: 100%;
+      padding: 12px;
+      background: green;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
 
-  return (
-    <div className="min-h-screen bg-white flex flex-col">
-      {/* Header */}
-      <header className="flex items-center gap-2 p-6">
-        <div className="w-8 h-8 bg-green-500 rounded-lg flex items-center justify-center">
-          <TrendingUp className="w-5 h-5 text-white" />
-        </div>
-        <span className="text-xl font-bold text-gray-900">AITrackStocks</span>
-      </header>
+<div class="box">
+  <h2>AITrackStocks</h2>
+  <p>Private Beta Access</p>
 
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col items-center justify-center px-4 -mt-20">
-        {/* Logo Icon */}
-        <div className="w-20 h-20 bg-green-500 rounded-2xl flex items-center justify-center mb-6 shadow-lg">
-          <TrendingUp className="w-10 h-10 text-white" />
-        </div>
+  <input type="email" placeholder="Enter your email">
+  <input type="password" placeholder="Enter your password">
 
-        {/* Title */}
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">
-          Welcome to AITrackStocks
-        </h1>
-        <p className="text-gray-500 mb-8">Private Beta Access</p>
+  <button>Access Platform</button>
+</div>
 
-        {/* Card */}
-        <div className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-gray-100 p-8">
-          {/* Lock Icon */}
-          <div className="flex justify-center mb-4">
-            <div className="w-12 h-12 bg-green-50 rounded-full flex items-center justify-center">
-              <Lock className="w-6 h-6 text-green-500" />
-            </div>
-          </div>
-
-          <h2 className="text-xl font-semibold text-center text-gray-900 mb-2">
-            Enter Access Code
-          </h2>
-          <p className="text-gray-400 text-center text-sm mb-6">
-            This platform is currently in private beta
-          </p>
-
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-600 p-3 rounded-lg mb-4 text-sm text-center">
-              {error}
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Enter your email"
-                className="w-full bg-gray-100 border-0 rounded-xl px-4 py-4 text-center text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500"
-                required
-              />
-            </div>
-
-            <div>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter your password"
-                className="w-full bg-gray-100 border-0 rounded-xl px-4 py-4 text-center text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500"
-                required
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-gradient-to-r from-green-400 to-green-500 hover:from-green-500 hover:to-green-600 text-white font-semibold py-4 rounded-xl transition flex items-center justify-center gap-2 disabled:opacity-50"
-            >
-              {loading ? 'Accessing...' : 'Access Platform'}
-              <ArrowRight className="w-5 h-5" />
-            </button>
-          </form>
-
-          <div className="mt-6 pt-6 border-t border-gray-100 text-center">
-            <p className="text-gray-400 text-sm mb-2">Don't have a code?</p>
-            <Link 
-              href="/register" 
-              className="text-green-500 font-semibold hover:text-green-600 flex items-center justify-center gap-1"
-            >
-              Request Access <ArrowRight className="w-4 h-4" />
-            </Link>
-          </div>
-        </div>
-      </main>
-
-      {/* Bottom Features */}
-      <div className="flex justify-center gap-12 pb-8 text-gray-400">
-        <div className="flex flex-col items-center gap-2">
-          <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-            </svg>
-          </div>
-        </div>
-        <div className="flex flex-col items-center gap-2">
-          <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-            </svg>
-          </div>
-        </div>
-        <div className="flex flex-col items-center gap-2">
-          <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-            </svg>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+</body>
+</html>
